@@ -30,11 +30,20 @@ target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
 
 message(STATUS "Compiler id = ${CMAKE_CXX_COMPILER_ID}")
 if(EMSCRIPTEN)
+    # also copy our index.html file for wasm builds
+    add_custom_target(
+        index_file
+        COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_SOURCE_DIR}/sources/index.html
+            ${CMAKE_BINARY_DIR}/index.html)
+    add_dependencies(${PROJECT_NAME} index_file)
+
     target_link_options(
         ${PROJECT_NAME} PRIVATE
         --preload-file ../assets
         -sEXPORTED_FUNCTIONS=_EnableSound,_main
         -sEXPORTED_RUNTIME_METHODS=ccall,cwrap)
+
     target_compile_definitions(${PROJECT_NAME} PUBLIC ASSETS_PATH="./assets/")
     target_compile_definitions(${PROJECT_NAME} PUBLIC EMSCRIPTEN=1) # Define EMCC macro for emscripten
     set(CMAKE_EXECUTABLE_SUFFIX ".html")

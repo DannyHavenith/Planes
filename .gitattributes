@@ -1,10 +1,11 @@
 # Asset files should be treated by git as binary
-*.png binary
-*.jpg binary
-*.ttf binary
-*.mp3 binary
-*.wav binary
 *.au  binary
-*.raw binary
-*.obj binary
+*.blend binary
 *.gltf binary
+*.jpg binary
+*.mp3 binary
+*.obj binary
+*.png binary
+*.raw binary
+*.ttf binary
+*.wav binary

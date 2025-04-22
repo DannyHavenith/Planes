@@ -3,6 +3,8 @@
 #include "GameWindow.h"
 #include "raylib.h"
 #include "VectorMath.h"
+
+
 #include <cmath>
 
 
@@ -41,7 +43,7 @@ Cloud CreateRandomCloud(float averageSize, float averageOpacity, int numberOfCir
             CloudCircle circle;
             const auto& referenceCircle = cloud.circles[i/4];
             float angle = getRandomValue() * 2 * M_PI;
-            float distance = averageSize/2 + averageSize * getRandomValue();
+            float distance = 2.0f * averageSize * getRandomValue();
             circle.position = {
                 referenceCircle.position.x + std::cos(angle) * distance,
                 referenceCircle.position.y + std::sin(angle) * distance

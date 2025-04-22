@@ -4,6 +4,12 @@
 #include "raylib.h"
 #include <string>
 
+/**
+ * This class exists to manage the Window resource by calling InitWindow in its
+ * constructor and CloseWindow in its destructor.
+ *
+ * It additionally stores the window dimensions and title.
+ */
 struct GameWindow
 {
     GameWindow(int width, int height, const char* title)

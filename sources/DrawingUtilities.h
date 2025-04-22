@@ -1,10 +1,10 @@
 #ifndef DRAWING_UTILITIES_H
 #define DRAWING_UTILITIES_H
 
+#include "Angle256.h"
 #include "GameWindow.h"
 #include "raylib.h"
 
-#include <cstdint>
 
 template <typename ValueType>
 ValueType Wrap(ValueType value, ValueType max)
@@ -30,7 +30,7 @@ inline void DrawWrapped(
     const Texture2D& texture,
     const Vector2& position,
     const Vector2& offset,
-    std::uint8_t angle,
+    Angle256 angle,
     const Color& tint)
 {
     Vector2 textureSize = { static_cast<float>(texture.width), static_cast<float>(texture.height) };

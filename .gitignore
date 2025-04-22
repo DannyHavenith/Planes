@@ -1,0 +1,4 @@
+.vscode/
+build/
+emscripten_build/
+CMakeSettings.json

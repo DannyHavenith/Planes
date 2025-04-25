@@ -41,7 +41,7 @@ if(EMSCRIPTEN)
     target_link_options(
         ${PROJECT_NAME} PRIVATE
         --preload-file ../assets
-        -sEXPORTED_FUNCTIONS=_EnableSound,_main
+        -sEXPORTED_FUNCTIONS=_EnableSound,_DrawDebugIndicators,_main
         -sEXPORTED_RUNTIME_METHODS=ccall,cwrap)
 
     target_compile_definitions(${PROJECT_NAME} PUBLIC ASSETS_PATH="./assets/")

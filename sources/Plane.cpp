@@ -47,6 +47,11 @@ namespace {
     } debugSettings;
 }
 
+void DrawPlaneDebugIndicators( bool doDraw)
+{
+    debugSettings.drawDiagnostics = doDraw;
+}
+
 Plane::Plane(
     std::string_view skin,
     Vector2 position,

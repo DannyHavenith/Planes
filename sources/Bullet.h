@@ -12,12 +12,12 @@ public:
     Bullet(Color color, int owner, Vector2 position, Vector2 speed);
 
     bool Update(const GameWindow &window, float deltaTime);
-    void Draw() const;
+    void Draw( const GameWindow &) const;
     int GetOwner() const { return owner; }
     friend Vector2 GetPosition( const Bullet &bullet) { return bullet.position; }
 
 private:
-    Color color = RED;
+    Color color = PURPLE;
     int owner;
     Vector2 position;
     Vector2 speed;
@@ -26,8 +26,6 @@ private:
 };
 
 using Bullets = std::vector<Bullet>;
-void Draw( const Bullets &bullets);
 void Update( Bullets &bullets, const GameWindow &window, float deltaTime);
-
 
 #endif // BULLET_H

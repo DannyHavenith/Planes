@@ -16,18 +16,9 @@ bool Bullet::Update(const GameWindow &window, float deltaTime)
     return (lifeTime -= deltaTime) > 0;
 }
 
-void Bullet::Draw() const
+void Bullet::Draw( const GameWindow &) const
 {
     DrawCircleV(position, 4, color);
-}
-
-
-void Draw( const Bullets &bullets)
-{
-    for (auto &bullet : bullets)
-    {
-        bullet.Draw();
-    }
 }
 
 void Update( Bullets &bullets, const GameWindow &window, float deltaTime)
@@ -44,4 +35,3 @@ void Update( Bullets &bullets, const GameWindow &window, float deltaTime)
         }
     }
 }
-

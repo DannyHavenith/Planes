@@ -22,6 +22,64 @@ constexpr auto windowTitle = "Combatants";
 
 namespace { // unnamed
 
+    // Uniform handling of Draw(). This defines concepts for drawable objects,
+    // rather than defining a Draw() interface.
+
+    template<typename T>
+    concept SelfDrawable = requires(T d, const GameWindow &window) {
+        d.Draw(window);
+    };
+
+    template<SelfDrawable D>
+    void Draw( const D &drawable, const GameWindow &window)
+    {
+        drawable.Draw( window);
+    }
+
+    template< typename T>
+    concept Drawable = requires(const T d, const GameWindow &window) {
+        Draw( d, window);
+    };
+
+    template<typename T>
+    concept DrawableRange = std::ranges::range<T> and Drawable<typename T::value_type>;
+
+    template<DrawableRange Container>
+    void Draw( const Container &drawables, const GameWindow &window)
+    {
+        for (const auto &drawable : drawables)
+        {
+            Draw( drawable, window);
+        }
+    }
+
+    template< typename T>
+    concept SelfUpdateable = requires(T u, const GameWindow &window, float deltaTime) {
+        u.Update(window, deltaTime);
+    };
+
+    template<SelfUpdateable U>
+    void Update( U &updateable, const GameWindow &window, float deltaTime)
+    {
+        updateable.Update(window, deltaTime);
+    }
+
+    template< typename T>
+    concept Updateable = requires(T u, const GameWindow &window, float deltaTime) {
+        Update( u, window, deltaTime);
+    };
+    template< typename T>
+    concept UpdateableRange = std::ranges::range<T> and Updateable<typename T::value_type>;
+
+    template<UpdateableRange Container>
+    void Update( Container &updateables, const GameWindow &window, float deltaTime)
+    {
+        for (auto &updateable : updateables)
+        {
+            Update( updateable, window, deltaTime);
+        }
+    }
+
     /**
      * Is a point inside a rectangle?
      *
@@ -166,11 +224,14 @@ public:
     Game& operator=(const Game&)    = delete;
     Game(Game&&)                    = delete;
     Game& operator=(Game&&)         = delete;
+    ~Game()                         = default;
+
     Plane &GetPlane() { return planes[0]; }
 
 
     void Update()
     {
+        using ::Update;
         const float deltaTime = GetFrameTime();
 
         // First, do updates.
@@ -191,16 +252,16 @@ public:
         // create bullets when the space key is pressed
         if (IsKeyPressed(KEY_SPACE))
         {
-            SetSoundPan( sounds.gun, 1.0f - (planes[0].GetPosition().x / (float)initialScreenWidth)/2.0f);
-            PlaySound(sounds.gun);
-            bullets.emplace_back( DARKGREEN, 0, planes[0].GetPosition(), planes[0].GetSpeedVector() * 2.0f);
+            controls[i]( i, planes[i], *this, bullets, sounds);
         }
 
-        // update bullet trajectories
-        ::Update( bullets, *this, deltaTime);
+        Update( planes, *this, deltaTime);
+
+        Update( bullets, *this, deltaTime);
+        Update( clouds, *this, deltaTime);
         DoCollisions();
 
-        // adapt the sounds to  what is happening.
+        // adapt the sounds to what is happening.
         UpdateSound(sounds.engine, planes[0]);
     }
 
@@ -212,17 +273,9 @@ public:
         BeginDrawing();
         ClearBackground(SKYBLUE);
 
-        // 1. bullets
-        Draw( bullets);
-
-        // 2. planes
-        for (const auto &plane : planes)
-        {
-            plane.Draw( *this);
-        }
-
-        // 3. clouds
-        DrawCloudSystem(clouds, *this);
+        Draw( bullets, *this);
+        Draw( planes, *this);
+        Draw( clouds, *this);
 
         EndDrawing();
     }
@@ -287,6 +340,11 @@ extern "C" {
     {
         auto &game = Game::GetInstance();
         game.EnableSound( enableEngine, enableGun);
+    }
+
+    void DrawDebugIndicators( bool draw)
+    {
+        DrawPlaneDebugIndicators( draw);
     }
 }
 

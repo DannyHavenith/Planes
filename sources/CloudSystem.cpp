@@ -62,18 +62,18 @@ CloudSystem CreateRandomCloudSystem(
     float averageSize,
     float averageOpacity)
 {
-    CloudSystem cloudSystem;
-    cloudSystem.clouds.reserve(numberOfClouds);
+    CloudSystem clouds;
+    clouds.reserve(numberOfClouds);
 
     for (int i = 0; i < numberOfClouds; ++i)
     {
-        cloudSystem.clouds.push_back(CreateRandomCloud(averageSize, averageOpacity, numberOfCircles));
+        clouds.push_back(CreateRandomCloud(averageSize, averageOpacity, numberOfCircles));
     }
 
-    return cloudSystem;
+    return clouds;
 }
 
-void DrawCloud( const Cloud& cloud, const GameWindow& window)
+void Draw( const Cloud& cloud, const GameWindow& window)
 {
     const Vector2 scale = { static_cast<float>(window.width), static_cast<float>(window.height) };
     const float scalarScale = std::min(scale.x, scale.y);
@@ -107,10 +107,11 @@ void DrawCloud( const Cloud& cloud, const GameWindow& window)
     //DrawCircleV( Scale( scale, cloud.position), 5, RED);
 }
 
-void DrawCloudSystem(const CloudSystem& cloudSystem, const GameWindow& window)
+void Update( Cloud& cloud, const GameWindow& window, float deltaTime)
 {
-    for (const auto& cloud : cloudSystem.clouds)
-    {
-        DrawCloud(cloud, window);
-    }
+    cloud.position.x += cloud.speed.x * deltaTime;
+    cloud.position.y += cloud.speed.y * deltaTime;
+    cloud.position = {
+        Wrap(cloud.position.x, 1.0f),
+        Wrap(cloud.position.y, 1.0f)};
 }

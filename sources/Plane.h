@@ -45,4 +45,6 @@ private:
     PlaneTextures LoadPlaneTextures( std::string_view skin);
 };
 
+void DrawPlaneDebugIndicators( bool doDraw = true);
+
 #endif // PLANE_H

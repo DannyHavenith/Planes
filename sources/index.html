@@ -80,7 +80,7 @@ canvas.emscripten { border: 0px none; background-color: black; }
 
 #controls {
   display: inline-block;
-  float: right;
+/*  float: right;*/
   vertical-align: top;
   margin-top: 30px;
   margin-right: 20px;
@@ -109,9 +109,14 @@ canvas.emscripten { border: 0px none; background-color: black; }
 
     <span id='controls'>
     <span><input type="checkbox" id="resize" checked>Resize canvas</span>
-      <span><input type="checkbox" id="pointerLock">Lock/hide mouse pointer &nbsp;&nbsp;&nbsp;</span>
-      <span><input type="button" value="Fullscreen" onclick="Module.requestFullscreen(document.getElementById('pointerLock').checked,
+    <span><input type="checkbox" id="pointerLock">Lock/hide mouse pointer &nbsp;&nbsp;&nbsp;</span>
+    <span><input type="button" value="Fullscreen" onclick="Module.requestFullscreen(document.getElementById('pointerLock').checked,
                                                                                 document.getElementById('resize').checked)">
+    <br>
+    <span>
+        <input type="checkbox" id="debugIndicators" onchange="drawDebugIndicators(this.checked)">
+        Show Debug Indicators
+    </span>
       </span>
       <div>Use Left, Right and SPACE</div>
     </span>
@@ -139,6 +144,11 @@ canvas.emscripten { border: 0px none; background-color: black; }
       }, false);
 
       var Module = {
+
+        onRuntimeInitialized: function() {
+            window.drawDebugIndicators = Module.cwrap('DrawDebugIndicators', null, ['number']);
+            drawDebugIndicators(0);
+        },
         print(...args) {
           console.log(...args);
           // These replacements are necessary if you render to raw HTML
@@ -191,7 +201,11 @@ canvas.emscripten { border: 0px none; background-color: black; }
           if (text) console.error('[post-exception status] ' + text);
         };
       };
+
     </script>
     <script async type="text/javascript" src="Planes.js"></script>
+    <script type="text/javascript">
+    </script>
+
   </body>
 </html>

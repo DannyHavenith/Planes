@@ -1,7 +1,6 @@
 #ifndef CLOUD_SYSTEM_H
 #define CLOUD_SYSTEM_H
 
-#include "DrawingUtilities.h"
 #include "raylib.h"
 
 #include <vector>
@@ -23,24 +22,10 @@ struct Cloud
     Color color;
 };
 
-struct CloudSystem
-{
-    void Update(const GameWindow& window, float deltaTime)
-    {
-        for (auto& cloud : clouds)
-        {
-            cloud.position.x += cloud.speed.x * deltaTime;
-            cloud.position.y += cloud.speed.y * deltaTime;
-            cloud.position = {
-                Wrap(cloud.position.x, 1.0f),
-                Wrap(cloud.position.y, 1.0f)};
-        }
-    }
-    std::vector<Cloud> clouds;
-};
+using CloudSystem = std::vector<Cloud>;
+void Draw(const Cloud& cloud, const GameWindow& window);
+void Update(Cloud& cloud, const GameWindow& window, float deltaTime);
 
-void DrawCloud(const Cloud& cloud, const GameWindow& window);
-void DrawCloudSystem(const CloudSystem& cloudSystem, const GameWindow& window);
 Cloud CreateRandomCloud(float averageSize, float averageOpacity, int numberOfCircles);
 CloudSystem CreateRandomCloudSystem(
     int numberOfClouds,

@@ -31,7 +31,8 @@ inline void DrawWrapped(
     const Vector2& position,
     const Vector2& offset,
     Angle256 angle,
-    const Color& tint)
+    const Color& tint,
+    bool offBottom = false)
 {
     Vector2 textureSize = { static_cast<float>(texture.width), static_cast<float>(texture.height) };
     Rectangle sourceRect = { 0.0f, 0.0f, textureSize.x, textureSize.y };
@@ -56,7 +57,7 @@ inline void DrawWrapped(
     {
         DrawTexturePro(texture, sourceRect, {destRect.x, destRect.y + window.height, destRect.width, destRect.height}, offset, rotation, tint);
     }
-    else if (position.y >= window.height - textureSize.y/2)
+    else if (not offBottom and position.y >= window.height - textureSize.y/2)
     {
         DrawTexturePro(texture, sourceRect, {destRect.x, destRect.y - window.height, destRect.width, destRect.height}, offset, rotation, tint);
     }

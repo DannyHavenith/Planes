@@ -54,10 +54,11 @@ void DrawPlaneDebugIndicators( bool doDraw)
 
 Plane::Plane(
     std::string_view skin,
+    Color color,
     Vector2 position,
     float speed,
     Angle256 pitch)
-    : position(position), speed(speed), pitch(pitch)
+    : color(color),position(position), speed(speed), pitch(pitch)
 {
     textures = LoadPlaneTextures( skin);
 }
@@ -76,7 +77,7 @@ void Plane::Draw( const GameWindow &window) const
 {
 
     // Draw the plane texture with wrapping.
-    DrawWrapped(window, textures.at(roll/16), position, positionOffset, pitch, WHITE);
+    DrawWrapped(window, textures.at(roll/16), position, positionOffset, pitch, WHITE, crashing);
 
     if (debugSettings.drawDiagnostics)
     {
@@ -94,13 +95,24 @@ void Plane::Draw( const GameWindow &window) const
 
 void Plane::Update( const GameWindow &window, float deltaTime)
 {
+    // do nothing if we (crashed) offscreen
+    if (position.y > window.height + positionOffset.y)
+    {
+        return;
+    }
+
     speedVector = Vector2{
         cos(pitch) * speed,
         sin(pitch) * speed};
     position += speedVector * deltaTime;
-    position = {
-        Wrap(position.x, static_cast<float>(window.width)),
-        Wrap(position.y, static_cast<float>(window.height))};
+
+    // Wrap around the screen edges, except when we are crashing.
+    if (not crashing)
+    {
+        position = {
+            Wrap(position.x, static_cast<float>(window.width)),
+            Wrap(position.y, static_cast<float>(window.height))};
+    }
 }
 
 Plane::PlaneTextures Plane::LoadPlaneTextures( std::string_view skin)

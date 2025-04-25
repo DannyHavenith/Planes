@@ -5,8 +5,10 @@
 #include "VectorMath.h"
 #include "Bullet.h"
 
+#include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <tuple>
 #include <vector>
 
@@ -116,49 +118,6 @@ namespace { // unnamed
         return collisions;
     }
 
-/**
- * Control the plane.
- *
- * Left and right arrow keys control the pitch. When the plane is
- * upside down, it will roll until it is upright again.
- *
- */
-void ControlPlane(Plane& plane)
-{
-    bool keyPressed = false;
-    if (IsKeyDown(KEY_RIGHT))
-    {
-        plane.DeltaPitch(2);
-        keyPressed = true;
-    }
-    else if (IsKeyDown(KEY_LEFT))
-    {
-        plane.DeltaPitch(-2);
-        keyPressed = true;
-    }
-
-    const auto roll = plane.GetRoll();
-    if (not keyPressed or (roll != 0 and roll != 128))
-    {
-        static constexpr std::int8_t rollCorrection = 4;
-        if (const auto pitch = plane.GetPitch(); pitch >= 64 and pitch < 192)
-        {
-            if (const auto roll = plane.GetRoll(); roll != 128)
-            {
-                plane.DeltaRoll(roll > 128 ? -rollCorrection : rollCorrection);
-            }
-        }
-        else
-        {
-            if (roll != 0)
-            {
-                plane.DeltaRoll(roll >= 128 ? +rollCorrection : -rollCorrection);
-            }
-        }
-    }
-}
-
-
 void UpdateSound(Music& engine, const Plane& plane)
 {
     SetMusicPan(engine, 0.75f - (plane.GetPosition().x / (float)initialScreenWidth)/2.0f);
@@ -188,6 +147,103 @@ struct Sounds
         SetMusicVolume(engine, enableEngine ? engineVolume : 0.0f);
     }
 };
+
+/**
+ * Control the plane.
+ *
+ * Left and right arrow keys control the pitch. When the plane is
+ * upside down, it will roll until it is upright again.
+ *
+ */
+ struct KeyboardPlaneControl
+ {
+    KeyboardKey keyLeft = KEY_LEFT;
+    KeyboardKey keyRight = KEY_RIGHT;
+    KeyboardKey keyTrigger = KEY_SPACE;
+
+    void RollToUpright(Plane& plane)
+    {
+        const auto roll = plane.GetRoll();
+        static constexpr std::int8_t rollCorrection = 4;
+        if (const auto pitch = plane.GetPitch(); pitch >= 64 and pitch < 192)
+        {
+            if (const auto roll = plane.GetRoll(); roll != 128)
+            {
+                plane.DeltaRoll(roll > 128 ? -rollCorrection : rollCorrection);
+            }
+        }
+        else
+        {
+            if (roll != 0)
+            {
+                plane.DeltaRoll(roll >= 128 ? +rollCorrection : -rollCorrection);
+            }
+        }
+    }
+
+    void operator()(
+        std::size_t planeIndex,
+        Plane& plane,
+        const GameWindow& window,
+        Bullets &bullets,
+        Sounds &sounds)
+    {
+        bool keyPressed = false;
+        if (IsKeyDown(keyRight))
+        {
+            plane.DeltaPitch(2);
+            keyPressed = true;
+        }
+        else if (IsKeyDown(keyLeft))
+        {
+            plane.DeltaPitch(-2);
+            keyPressed = true;
+        }
+
+        const auto roll = plane.GetRoll();
+        if (not keyPressed or (roll != 0 and roll != 128))
+        {
+            RollToUpright(plane);
+        }
+
+        // create bullets when the space key is pressed
+        if (IsKeyPressed(keyTrigger))
+        {
+            SetSoundPan( sounds.gun, 1.0f - (plane.GetPosition().x / (float)initialScreenWidth)/2.0f);
+            PlaySound(sounds.gun);
+            bullets.emplace_back( plane.GetColor(), planeIndex, plane.GetPosition(), plane.GetSpeedVector() * 2.0f);
+        }
+    }
+};
+
+/**
+ * A 'control' strategy that does not allow the user to control the plane, but rather lets the plane
+ *
+ */
+struct CrashingPlaneControl
+{
+    void operator()(
+        std::size_t planeIndex,
+        Plane& plane,
+        const GameWindow& window,
+        Bullets &bullets,
+        Sounds &sounds)
+    {
+        plane.DeltaRoll(4);
+
+        const auto pitch = plane.GetPitch();
+        if (pitch >= 192 or pitch < 32)
+        {
+            plane.DeltaPitch(2);
+        }
+        else if (pitch >= 96)
+        {
+            plane.DeltaPitch(-2);
+        }
+    }
+};
+
+using PlaneControl = std::function<void(std::size_t, Plane&, const GameWindow&, Bullets&, Sounds&)>;
 
 /**
  * This class is used to initialize and close the audio device.
@@ -237,20 +293,8 @@ public:
         // First, do updates.
         GameWindow::Update();
 
-        // make the plane react to keyboard input
-        ControlPlane(planes[0]);
-
-        // do physics updates
-        for (auto& plane : planes)
-        {
-            plane.Update( *this, deltaTime);
-        }
-
-        // let clouds do their thing
-        clouds.Update( *this, deltaTime);
-
-        // create bullets when the space key is pressed
-        if (IsKeyPressed(KEY_SPACE))
+        assert(controls.size() == planes.size());
+        for (std::size_t i = 0; i < controls.size(); ++i)
         {
             controls[i]( i, planes[i], *this, bullets, sounds);
         }
@@ -296,8 +340,8 @@ private:
     :
     GameWindow( initialScreenWidth, initialScreenHeight, "Combatants"),
     planes{{
-        {"green", { initialScreenWidth / 2.0f + 20, initialScreenHeight / 2.0f}, 220, 128},
-        {"red", { initialScreenWidth / 2.0f - 20, initialScreenHeight / 2.0f}, 220, 0}}}
+        {"green", DARKGREEN, { initialScreenWidth / 2.0f + 20, initialScreenHeight / 2.0f}, 220, 128},
+        {"red", RED, { initialScreenWidth / 2.0f - 20, initialScreenHeight / 2.0f}, 220, 0}}}
     {
         PlayMusicStream( sounds.engine);
     }
@@ -315,11 +359,16 @@ private:
                 continue;
             }
             bullets.erase( bullets.begin() + bulletIndex); // TODO: deal with multiple bullets and index shift
-            planes[planeIndex].DeltaRoll( 32);
+            controls[planeIndex] = CrashingPlaneControl();
+            planes[planeIndex].SetCrashing( true);
         }
     }
 
     Sounds                  sounds;
+    std::array<PlaneControl, 2> controls = {
+        KeyboardPlaneControl( KEY_LEFT, KEY_RIGHT, KEY_SPACE),
+        KeyboardPlaneControl( KEY_A, KEY_D, KEY_LEFT_CONTROL)
+    };
     std::array<Plane, 2>    planes;
     Bullets                 bullets;
     CloudSystem             clouds = CreateRandomCloudSystem(

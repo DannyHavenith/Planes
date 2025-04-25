@@ -13,7 +13,12 @@ struct GameWindow;
 class Plane
 {
 public:
-    Plane( std::string_view skin, Vector2 position, float speed = 200, Angle256 angle = 0);
+    Plane(
+        std::string_view skin,
+        Color color,
+        Vector2 position,
+        float speed = 200,
+        Angle256 pitch = 0);
 
     Angle256 DeltaPitch(std::int8_t angle);
     Angle256 DeltaRoll(std::int8_t angle);
@@ -22,10 +27,13 @@ public:
     Vector2 GetPosition() const { return position; }
     Vector2 GetSpeedVector() const { return speedVector; }
     float GetSpeed() const { return speed; }
+    Color GetColor() const { return color; }
 
     void Draw( const GameWindow &window) const;
     void Update( const GameWindow &window, float deltaTime);
     Rectangle GetBoundingBox() const;
+    void SetCrashing(bool crashing) { this->crashing = crashing; }
+    bool IsCrashing() const { return crashing; }
     bool Collides( Vector2 point) const;
 
 private:
@@ -34,11 +42,13 @@ private:
     Vector2 position; ///< position of the midpoint of the plane
     Vector2 positionOffset = { 0, 0 }; ///< offset of the midpoint relative to the plane texture
 
-    float    speed;
-
+    Color   color = PURPLE;
+    float    speed = 200.0f;
     Angle256 pitch = 0;
     Angle256 roll = 0;
     PlaneTextures textures;
+    bool crashing = false;
+
     // this is a cached value, calculated from the pitch and speed.
     mutable Vector2 speedVector = { 0, 0 };
 

@@ -9,8 +9,10 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <iomanip>
+#include <set>
+#include <sstream>
 #include <tuple>
-#include <vector>
 
 #if defined( EMSCRIPTEN)
 #include <emscripten/emscripten.h>
@@ -32,8 +34,7 @@ namespace { // unnamed
         d.Draw(window);
     };
 
-    template<SelfDrawable D>
-    void Draw( const D &drawable, const GameWindow &window)
+    void Draw( const SelfDrawable auto &drawable, const GameWindow &window)
     {
         drawable.Draw( window);
     }
@@ -46,8 +47,7 @@ namespace { // unnamed
     template<typename T>
     concept DrawableRange = std::ranges::range<T> and Drawable<typename T::value_type>;
 
-    template<DrawableRange Container>
-    void Draw( const Container &drawables, const GameWindow &window)
+    void Draw( const DrawableRange auto &drawables, const GameWindow &window)
     {
         for (const auto &drawable : drawables)
         {
@@ -60,8 +60,7 @@ namespace { // unnamed
         u.Update(window, deltaTime);
     };
 
-    template<SelfUpdateable U>
-    void Update( U &updateable, const GameWindow &window, float deltaTime)
+    void Update( SelfUpdateable auto &updateable, const GameWindow &window, float deltaTime)
     {
         updateable.Update(window, deltaTime);
     }
@@ -73,8 +72,7 @@ namespace { // unnamed
     template< typename T>
     concept UpdateableRange = std::ranges::range<T> and Updateable<typename T::value_type>;
 
-    template<UpdateableRange Container>
-    void Update( Container &updateables, const GameWindow &window, float deltaTime)
+    void Update( UpdateableRange auto &updateables, const GameWindow &window, float deltaTime)
     {
         for (auto &updateable : updateables)
         {
@@ -92,11 +90,15 @@ namespace { // unnamed
                 and point.y >= box.y and point.y <= box.y + box.height);
     }
 
-    using Collisions = std::vector< std::tuple<unsigned int, unsigned int>>;
+    using Collisions = std::set< std::tuple<unsigned int, unsigned int>>;
 
     /**
      * Find all collisions between points and collidables and return all found
      * collisions.
+     *
+     * Each point object will appear at most once in the result and because
+     * Collisions is a set, the collisions are ordered by the point object
+     * index.
      *
      */
     template< typename PointObjects, typename Collidables>
@@ -111,7 +113,8 @@ namespace { // unnamed
                     IsIn(GetPosition(points[i]), collidables[j].GetBoundingBox())
                     and collidables[j].Collides( GetPosition(points[i])))
                 {
-                    collisions.emplace_back( i, j);
+                    collisions.emplace( i, j);
+                    continue; // Stop looking for more collisions for this point.
                 }
             }
         }
@@ -149,10 +152,9 @@ struct Sounds
 };
 
 /**
- * Control the plane.
+ * Control the plane with keyboard keys.
  *
- * Left and right arrow keys control the pitch. When the plane is
- * upside down, it will roll until it is upright again.
+ * When the plane is upside down, it will roll until it is upright again.
  *
  */
  struct KeyboardPlaneControl
@@ -183,6 +185,7 @@ struct Sounds
 
     void operator()(
         std::size_t planeIndex,
+        float deltaTime,
         Plane& plane,
         const GameWindow& window,
         Bullets &bullets,
@@ -191,27 +194,30 @@ struct Sounds
         bool keyPressed = false;
         if (IsKeyDown(keyRight))
         {
-            plane.DeltaPitch(2);
+            plane.DeltaPitch( 120.0 * deltaTime + 0.5f);
             keyPressed = true;
         }
         else if (IsKeyDown(keyLeft))
         {
-            plane.DeltaPitch(-2);
+            plane.DeltaPitch( -120.0 * deltaTime - 0.5f);
             keyPressed = true;
         }
 
         const auto roll = plane.GetRoll();
-        if (not keyPressed or (roll != 0 and roll != 128))
+        if ((not keyPressed or (roll != 0 and roll != 128))and not (plane.GetState() == Plane::Crashing))
         {
             RollToUpright(plane);
         }
 
-        // create bullets when the space key is pressed
-        if (IsKeyPressed(keyTrigger))
+        // create bullets when the trigger key is pressed
+        if (IsKeyPressed(keyTrigger) and plane.GetState() == Plane::Flying)
+
         {
-            SetSoundPan( sounds.gun, 1.0f - (plane.GetPosition().x / (float)initialScreenWidth)/2.0f);
-            PlaySound(sounds.gun);
-            bullets.emplace_back( plane.GetColor(), planeIndex, plane.GetPosition(), plane.GetSpeedVector() * 2.0f);
+            if (plane.Fire( bullets))
+            {
+                SetSoundPan( sounds.gun, 1.0f - (plane.GetPosition().x / (float)initialScreenWidth)/2.0f);
+                PlaySound(sounds.gun);
+            }
         }
     }
 };
@@ -220,30 +226,15 @@ struct Sounds
  * A 'control' strategy that does not allow the user to control the plane, but rather lets the plane
  *
  */
-struct CrashingPlaneControl
-{
-    void operator()(
-        std::size_t planeIndex,
-        Plane& plane,
-        const GameWindow& window,
-        Bullets &bullets,
-        Sounds &sounds)
-    {
-        plane.DeltaRoll(4);
-
-        const auto pitch = plane.GetPitch();
-        if (pitch >= 192 or pitch < 32)
-        {
-            plane.DeltaPitch(2);
-        }
-        else if (pitch >= 96)
-        {
-            plane.DeltaPitch(-2);
-        }
-    }
-};
-
-using PlaneControl = std::function<void(std::size_t, Plane&, const GameWindow&, Bullets&, Sounds&)>;
+using PlaneControl =
+    std::function<
+        void(
+            std::size_t planeIndex,
+            float deltaTime,
+            Plane&,
+            const GameWindow&,
+            Bullets&,
+            Sounds&)>;
 
 /**
  * This class is used to initialize and close the audio device.
@@ -285,30 +276,94 @@ public:
     Plane &GetPlane() { return planes[0]; }
 
 
+    /**
+    * Update the world state.
+    */
     void Update()
     {
         using ::Update;
         const float deltaTime = GetFrameTime();
 
         // First, do updates.
+        // figure out screen size
         GameWindow::Update();
+        HandleGameMechanics();
 
-        assert(controls.size() == planes.size());
-        for (std::size_t i = 0; i < controls.size(); ++i)
+        // let players control their planes
+        assert(players.size() == planes.size());
+        for (std::size_t i = 0; i < players.size(); ++i)
         {
-            controls[i]( i, planes[i], *this, bullets, sounds);
+            players[i].control( i, deltaTime, planes[i], *this, bullets, sounds);
         }
 
+        // Do physics.
         Update( planes, *this, deltaTime);
-
         Update( bullets, *this, deltaTime);
         Update( clouds, *this, deltaTime);
+
+        // Do physics that go bang.
         DoCollisions();
+
+
 
         // adapt the sounds to what is happening.
         UpdateSound(sounds.engine, planes[0]);
     }
 
+    void HandleGameMechanics()
+    {
+        // reset planes that are in crashed state
+        for (auto& plane : planes)
+        {
+            if (plane.GetState() == Plane::Crashed)
+            {
+                plane.Reset({ width / 2.0f, height / 2.0f }, 220, 0);
+            }
+        }
+    }
+
+    std::string FormatScore(int score)
+    {
+        return (std::ostringstream() << std::setw(2) << std::setfill('0') << score). str();
+    }
+
+    void DrawScore()
+    {
+
+
+        const int fontSize = 50;
+        const int offset = 20;
+        const int dropShadowOffset = 3;
+
+        // Format scores with leading zeros using std::format
+        const std::string score0 = FormatScore( players[0].score);
+        const std::string score1 = FormatScore( players[1].score);
+
+        int textWidth = MeasureText(score1.c_str(), fontSize);
+
+
+        // Draw drop shadow for player 0's score
+        DrawText(score0.c_str(), offset + dropShadowOffset, offset + dropShadowOffset, fontSize, Fade( GRAY, 0.5f));
+        // Draw player 0's score in the top left corner
+        DrawText(score0.c_str(), offset, offset, fontSize, planes[0].GetColor());
+
+        // Draw drop shadow for player 1's score
+        DrawText(score1.c_str(), width - textWidth - offset + dropShadowOffset, offset + dropShadowOffset, fontSize, GRAY);
+        // Draw player 1's score in the top right corner
+        DrawText(score1.c_str(), width - textWidth - offset, offset, fontSize, planes[1].GetColor());
+
+        // Draw the bullet count for plane 0 directly below the score
+        planes[0].DrawBulletCount(*this, { offset, offset + fontSize + 10.0f });
+
+        // Draw the bullet count for plane 1 directly below the score
+        planes[1].DrawBulletCount(*this, { static_cast<float>(width - textWidth - offset), offset + fontSize + 10.0f });
+
+
+    }
+
+    /**
+    * Draw the world.
+    */
     void Draw()
     {
         using ::Draw;
@@ -320,6 +375,7 @@ public:
         Draw( bullets, *this);
         Draw( planes, *this);
         Draw( clouds, *this);
+        DrawScore();
 
         EndDrawing();
     }
@@ -340,8 +396,8 @@ private:
     :
     GameWindow( initialScreenWidth, initialScreenHeight, "Combatants"),
     planes{{
-        {"green", DARKGREEN, { initialScreenWidth / 2.0f + 20, initialScreenHeight / 2.0f}, 220, 128},
-        {"red", RED, { initialScreenWidth / 2.0f - 20, initialScreenHeight / 2.0f}, 220, 0}}}
+        {0, "green", DARKGREEN, { initialScreenWidth / 2.0f + 20, initialScreenHeight / 2.0f}, 220, 128},
+        {1, "red", RED, { initialScreenWidth / 2.0f - 20, initialScreenHeight / 2.0f}, 220, 0}}}
     {
         PlayMusicStream( sounds.engine);
     }
@@ -350,29 +406,44 @@ private:
     {
         const auto collisions = FindCollisions( bullets, planes);
 
+        // we assume that:
+        // 1. collisions are ordered by the index of the bullet
+        // 2. each bullet occurs only once in the list of collisions
+        // These assumptions must be guaranteed by the FindCollisions function.
+        int bulletIndexOffset = 0;
         for (const auto& collision : collisions)
         {
             const auto bulletIndex = std::get<0>(collision);
             const auto planeIndex  = std::get<1>(collision);
-            if (bullets[bulletIndex].GetOwner() == planeIndex)
+            if (
+                bullets[bulletIndex].GetOwner() != planeIndex
+                and planes[planeIndex].GetState() == Plane::Flying)
             {
-                continue;
+                // A bullet of one player has hit a plane of the other player.
+                bullets.erase( bullets.begin() + bulletIndex + bulletIndexOffset);
+                planes[planeIndex].SetState(Plane::Crashing);
+                --bulletIndexOffset;
+
+                players[ bullets[bulletIndex].GetOwner()].score += 1;
             }
-            bullets.erase( bullets.begin() + bulletIndex); // TODO: deal with multiple bullets and index shift
-            controls[planeIndex] = CrashingPlaneControl();
-            planes[planeIndex].SetCrashing( true);
         }
     }
 
+    struct Player
+    {
+        PlaneControl control;
+        int score = 0;
+    };
+
     Sounds                  sounds;
-    std::array<PlaneControl, 2> controls = {
-        KeyboardPlaneControl( KEY_LEFT, KEY_RIGHT, KEY_SPACE),
-        KeyboardPlaneControl( KEY_A, KEY_D, KEY_LEFT_CONTROL)
+    std::array< Player, 2>  players = {
+        Player{KeyboardPlaneControl( KEY_LEFT, KEY_RIGHT, KEY_SPACE)},
+        Player{KeyboardPlaneControl( KEY_A, KEY_D, KEY_LEFT_SHIFT)}
     };
     std::array<Plane, 2>    planes;
     Bullets                 bullets;
     CloudSystem             clouds = CreateRandomCloudSystem(
-        6, 15, 40.0f/1024, 0.9f);
+        4, 24, 50.0f/1024, 0.9f);
 };
 
 void UpdateDrawFrame()
